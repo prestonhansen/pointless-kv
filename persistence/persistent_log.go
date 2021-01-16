@@ -4,7 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"io"
-	"strings"
+	"regexp"
 )
 
 type PersistentKVLog struct {
@@ -20,8 +20,7 @@ func (log *PersistentKVLog) GetLatest(key string) (string, error) {
 	var latestValue string
 	for scanner.Scan() {
 		line := scanner.Text()
-		// todo this doesn't handle commas inside the key/value (use regexp?)
-		split := strings.Split(line, ",")
+		split := regexp.MustCompile(`,`).Split(line, 2)
 		k := split[0]
 		v := split[1]
 		if k == key {
