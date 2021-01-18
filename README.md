@@ -3,7 +3,7 @@
 
 ## Features
 - [x] Get and put values for keys
-- [ ] Persistent append-only storage backed with local files
-- [ ] Indexing for fast lookups
+- [x] Persistent append-only storage backed with local files
+- [x] Indexing for fast lookups (uses a hash index - all keys need to fit in memory!)
 - [ ] Transactions
 - [ ] Alternate storage backends such as S3, GCS, ...
