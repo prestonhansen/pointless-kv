@@ -4,27 +4,42 @@ import (
 	"bufio"
 	"fmt"
 	"io"
+	"os"
 	"regexp"
 )
 
 type PersistentKVLog struct {
-	Seeker io.ReadWriteSeeker
+	file            *os.File
+	keyToByteOffset map[string]int64
 }
 
+var commaRegex = regexp.MustCompile(`,`)
+
 func (log *PersistentKVLog) GetLatest(key string) (string, error) {
-	// go to start of data
-	log.Seeker.Seek(0, 0)
+	offset, present := log.keyToByteOffset[key]
+	if present {
+		log.file.Seek(offset, io.SeekStart)
+	} else {
+		log.file.Seek(0, io.SeekStart)
+	}
 
 	// read until we find our key
-	scanner := bufio.NewScanner(log.Seeker)
+	scanner := bufio.NewScanner(log.file)
 	var latestValue string
 	for scanner.Scan() {
 		line := scanner.Text()
-		split := regexp.MustCompile(`,`).Split(line, 2)
+		split := commaRegex.Split(line, 2)
 		k := split[0]
 		v := split[1]
 		if k == key {
 			latestValue = v
+			log.keyToByteOffset[key] = offset
+		}
+		offset += (int64)(len(line)) + 1
+		// if we used the cached offset, we know this is the latest value.
+		// no need to scan further.
+		if present {
+			break
 		}
 	}
 	// todo handle key not found
@@ -33,9 +48,17 @@ func (log *PersistentKVLog) GetLatest(key string) (string, error) {
 }
 
 func (log *PersistentKVLog) Append(key string, value string) error {
-	// go to end of file
-	log.Seeker.Seek(0, io.SeekEnd)
+	stat, err := log.file.Stat()
+	if err != nil {
+		// todo
+	}
+	log.keyToByteOffset[key] = stat.Size()
+	log.file.Seek(0, io.SeekEnd)
 	// todo how to handle writing values that contain newlines?
-	fmt.Fprintf(log.Seeker, "%s,%s\n", key, value)
+	fmt.Fprintf(log.file, "%s,%s\n", key, value)
 	return nil
+}
+
+func NewPersistentKVLog(file *os.File) *PersistentKVLog {
+	return &PersistentKVLog{file, make(map[string]int64)}
 }

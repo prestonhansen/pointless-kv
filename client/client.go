@@ -22,6 +22,6 @@ func (client *Client) Put(key string, value string) error {
 }
 
 func NewClient(f *os.File) *Client {
-	log := persistence.PersistentKVLog{f}
-	return &Client{&log}
+	log := persistence.NewPersistentKVLog(f)
+	return &Client{log}
 }
