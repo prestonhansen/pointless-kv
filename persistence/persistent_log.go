@@ -10,10 +10,28 @@ import (
 
 type PersistentKVLog struct {
 	file            *os.File
-	keyToByteOffset map[string]int64
+	keyToByteOffset map[string]int64 // our very simple index for O(1) lookups
 }
 
 var commaRegex = regexp.MustCompile(`,`)
+
+// Reindex scans through the whole "database" and updates the in memory index.
+// Maybe this method could be exposed indirectly via the Client? Give an
+// option to reindex automatically on startup? Not sure
+func (log *PersistentKVLog) Reindex() error {
+	log.file.Seek(0, io.SeekStart)
+	var offset int64 = 0
+	log.keyToByteOffset = make(map[string]int64)
+	scanner := bufio.NewScanner(log.file)
+	for scanner.Scan() {
+		line := scanner.Text()
+		split := commaRegex.Split(line, 2)
+		k := split[0]
+		log.keyToByteOffset[k] = offset
+		offset += (int64)(len(line)) + 1
+	}
+	return nil
+}
 
 func (log *PersistentKVLog) GetLatest(key string) (string, error) {
 	offset, present := log.keyToByteOffset[key]

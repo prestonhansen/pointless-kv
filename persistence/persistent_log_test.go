@@ -108,6 +108,10 @@ func TestGetSameKeyMultipleTimes(t *testing.T) {
 	defer cleanDatabase()
 
 	log := NewPersistentKVLog(database)
+	_, indexed := log.keyToByteOffset["key1"]
+	if indexed {
+		t.Error("Didn't expect key to be indexed on initialization")
+	}
 	log.GetLatest("key1")
 	got, err := log.GetLatest("key1")
 	want := "value1"
@@ -117,11 +121,13 @@ func TestGetSameKeyMultipleTimes(t *testing.T) {
 	if got != want {
 		t.Errorf("got %s want %s", got, want)
 	}
+	_, indexed = log.keyToByteOffset["key1"]
+	if !indexed {
+		t.Error("Expected key to be indexed but it wasn't")
+	}
 }
 
-// Covers writing a key (and indexing it) then reading. As above, should cover this
-// more directly via refactor.
-func TestPutThenGet(t *testing.T) {
+func TestPutThenGetUpdatesIndex(t *testing.T) {
 	database, cleanDatabase := createTempFile(t, "")
 	defer cleanDatabase()
 
@@ -134,5 +140,28 @@ func TestPutThenGet(t *testing.T) {
 	}
 	if got != want {
 		t.Errorf("got %s want %s", got, want)
+	}
+	_, indexed := log.keyToByteOffset["key1"]
+	if !indexed {
+		t.Error("Expected key to be indexed but it wasn't")
+	}
+}
+
+func TestReindex(t *testing.T) {
+	database, cleanDatabase := createTempFile(t, `key1,value1
+key2,value2
+key1,value3
+key3,value4
+key3,value5
+`)
+	defer cleanDatabase()
+
+	log := NewPersistentKVLog(database)
+	log.Reindex()
+	for _, key := range []string{"key1", "key2", "key3"} {
+		_, indexed := log.keyToByteOffset[key]
+		if !indexed {
+			t.Errorf("Expected %s to be indexed but it wasn't", key)
+		}
 	}
 }
