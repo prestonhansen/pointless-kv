@@ -1,8 +1,10 @@
 package persistence
 
 import (
+	"io"
 	"io/ioutil"
 	"os"
+	"strings"
 	"testing"
 )
 
@@ -161,6 +163,51 @@ key3,value5
 		_, indexed := log.keyToByteOffset[key]
 		if !indexed {
 			t.Errorf("Expected %s to be indexed but it wasn't", key)
+		}
+	}
+}
+
+func TestCompaction(t *testing.T) {
+	database, cleanDatabase := createTempFile(t, `key1,value1
+key2,value2
+key1,value3
+key2,value4
+key3,value5
+`)
+	defer cleanDatabase()
+
+	newDatabase, cleanNewDatabase := createTempFile(t, "")
+	defer cleanNewDatabase()
+
+	log := NewPersistentKVLog(database)
+	log.Compact(newDatabase)
+	newDatabase.Seek(0, io.SeekStart)
+	compacted, err := ioutil.ReadAll(newDatabase)
+	if err != nil {
+		t.Error(err)
+	}
+	lines := strings.Split(string(compacted), "\n")
+	// the three keys plus trailing newline
+	if len(lines) != 4 {
+		t.Errorf("Expected 4 lines after compaction, got %d. full DB: %q", len(lines), lines)
+	}
+
+	cases := []struct {
+		Key  string
+		Want string
+	}{
+		{"key1", "value3"},
+		{"key2", "value4"},
+		{"key3", "value5"},
+	}
+	for _, c := range cases {
+		_, indexed := log.keyToByteOffset[c.Key]
+		if !indexed {
+			t.Errorf("Expected %s to be indexed but it wasn't", c.Key)
+		}
+		got, _ := log.GetLatest(c.Key)
+		if got != c.Want {
+			t.Errorf("Expected %s to be %s but got %s", c.Key, c.Want, got)
 		}
 	}
 }

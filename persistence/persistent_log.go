@@ -15,24 +15,6 @@ type PersistentKVLog struct {
 
 var commaRegex = regexp.MustCompile(`,`)
 
-// Reindex scans through the whole "database" and updates the in memory index.
-// Maybe this method could be exposed indirectly via the Client? Give an
-// option to reindex automatically on startup? Not sure
-func (log *PersistentKVLog) Reindex() error {
-	log.file.Seek(0, io.SeekStart)
-	var offset int64 = 0
-	log.keyToByteOffset = make(map[string]int64)
-	scanner := bufio.NewScanner(log.file)
-	for scanner.Scan() {
-		line := scanner.Text()
-		split := commaRegex.Split(line, 2)
-		k := split[0]
-		log.keyToByteOffset[k] = offset
-		offset += (int64)(len(line)) + 1
-	}
-	return nil
-}
-
 func (log *PersistentKVLog) GetLatest(key string) (string, error) {
 	offset, present := log.keyToByteOffset[key]
 	if present {
@@ -79,4 +61,43 @@ func (log *PersistentKVLog) Append(key string, value string) error {
 
 func NewPersistentKVLog(file *os.File) *PersistentKVLog {
 	return &PersistentKVLog{file, make(map[string]int64)}
+}
+
+// Reindex scans through the whole "database" and updates the in memory index.
+// Maybe this method could be exposed indirectly via the Client? Give an
+// option to reindex automatically on startup? Not sure
+func (log *PersistentKVLog) Reindex() error {
+	log.file.Seek(0, io.SeekStart)
+	var offset int64 = 0
+	log.keyToByteOffset = make(map[string]int64)
+	scanner := bufio.NewScanner(log.file)
+	for scanner.Scan() {
+		line := scanner.Text()
+		split := commaRegex.Split(line, 2)
+		k := split[0]
+		log.keyToByteOffset[k] = offset
+		offset += (int64)(len(line)) + 1
+	}
+	return nil
+}
+
+func (log *PersistentKVLog) Compact(newFile *os.File) {
+	log.file.Seek(0, io.SeekStart)
+	scanner := bufio.NewScanner(log.file)
+	log.keyToByteOffset = make(map[string]int64)
+	log.file = newFile
+	keyToLatestValue := make(map[string]string)
+	// todo this method assumes we can fit one entry for each (key, value) in oldFile.
+	// this seems ok once we use segment files with a capped size, but for now relies
+	// on oldFile not containing too many unique keys
+	for scanner.Scan() {
+		line := scanner.Text()
+		split := commaRegex.Split(line, 2)
+		key := split[0]
+		value := split[1]
+		keyToLatestValue[key] = value
+	}
+	for key, value := range keyToLatestValue {
+		log.Append(key, value)
+	}
 }
