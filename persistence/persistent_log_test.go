@@ -100,10 +100,9 @@ func TestAppendToEmptyLog(t *testing.T) {
 	}
 }
 
-// Covers the case where we don't have a key indexed. Should figure out
-// how to test that behavior more directly and less through assumed implementation
-// details as in here.
-func TestGetSameKeyMultipleTimes(t *testing.T) {
+// the following tests verify indexing via inspection of the underlying map directly.
+// maybe this is a little gross? not sure further abstraction is worth it
+func TestGetKeyUpdatesIndex(t *testing.T) {
 	database, cleanDatabase := createTempFile(t, "key1,value1\n")
 	defer cleanDatabase()
 
