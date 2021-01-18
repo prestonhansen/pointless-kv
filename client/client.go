@@ -1,13 +1,27 @@
 package client
 
-// replace this with persistent storage
-var dictionary map[string]string = make(map[string]string)
+import (
+	"github.com/prestonhansen/pointless-kv/persistence"
+	"os"
+)
 
-func Get(key string) string {
-	return dictionary[key]
+type Client struct {
+	log persistence.KVLog
 }
 
-func Put(key string, value string) error {
-	dictionary[key] = value
-	return nil
+func (client *Client) Get(key string) string {
+	value, err := client.log.GetLatest(key)
+	if err != nil {
+		//todo
+	}
+	return value
+}
+
+func (client *Client) Put(key string, value string) error {
+	return client.log.Append(key, value)
+}
+
+func NewClient(f *os.File) *Client {
+	log := persistence.PersistentKVLog{f}
+	return &Client{&log}
 }
